@@ -3,40 +3,15 @@ import anthropic
 import json
 import os
 import base64
+import hmac
 import subprocess
+from supabase import create_client
 from dotenv import load_dotenv
 from datetime import datetime
-
-import hmac
-
-def check_password():
-    if "authenticated" not in st.session_state:
-        st.session_state.authenticated = False
-
-    if st.session_state.authenticated:
-        return True
-
-    st.title("🌿 Hjerlhede Marketing Agent")
-    st.markdown("Log ind for at fortsætte.")
-    kodeord = st.text_input("Kodeord", type="password")
-    if st.button("Log ind", type="primary"):
-        if hmac.compare_digest(kodeord, st.secrets["APP_PASSWORD"]):
-            st.session_state.authenticated = True
-            st.rerun()
-        else:
-            st.error("Forkert kodeord.")
-    return False
-
-if not check_password():
-    st.stop()
 
 load_dotenv()
 
 KNOWLEDGE_FILE = "data/hjerlhede_knowledge.txt"
-INSPIRATION_INSTAGRAM_FILE = "data/inspiration_instagram.json"
-INSPIRATION_FACEBOOK_FILE = "data/inspiration_facebook.json"
-HISTORIK_FILE = "data/historik.json"
-SIDER_FILE = "data/sider.json"
 
 DEFAULT_SIDER = [
     "https://www.hjerlhede.dk",
@@ -56,75 +31,136 @@ DEFAULT_SIDER = [
 ]
 
 
+# --- Supabase ---
+def get_supabase():
+    url = st.secrets.get("SUPABASE_URL") or os.getenv("SUPABASE_URL")
+    key = st.secrets.get("SUPABASE_KEY") or os.getenv("SUPABASE_KEY")
+    return create_client(url, key)
+
+
+# --- Login ---
+def check_password():
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+    if st.session_state.authenticated:
+        return True
+    st.title("🌿 Hjerlhede Marketing Agent")
+    st.markdown("Log ind for at fortsætte.")
+    kodeord = st.text_input("Kodeord", type="password")
+    if st.button("Log ind", type="primary"):
+        forventet = st.secrets.get("APP_PASSWORD") or os.getenv("APP_PASSWORD", "")
+        if hmac.compare_digest(kodeord, forventet):
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("Forkert kodeord.")
+    return False
+
+
+if not check_password():
+    st.stop()
+
+
+# --- Hjælpefunktioner ---
 def load_knowledge():
-    with open(KNOWLEDGE_FILE, "r", encoding="utf-8") as f:
-        return f.read()
+    try:
+        with open(KNOWLEDGE_FILE, "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        return ""
 
 
 def load_retningslinjer():
+    sb = get_supabase()
+    try:
+        res = sb.table("indstillinger").select("værdi").eq("nøgle", "retningslinjer").execute()
+        if res.data:
+            return res.data[0]["værdi"]
+    except:
+        pass
     try:
         with open("retningslinjer.txt", "r", encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
-        return "Ingen retningslinjer fundet."
+        return ""
+
+
+def gem_retningslinjer(tekst):
+    sb = get_supabase()
+    sb.table("indstillinger").upsert({"nøgle": "retningslinjer", "værdi": tekst}).execute()
 
 
 def load_inspiration(platform):
-    fil = INSPIRATION_INSTAGRAM_FILE if platform == "instagram" else INSPIRATION_FACEBOOK_FILE
-    try:
-        with open(fil, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
+    sb = get_supabase()
+    res = sb.table("inspiration").select("id, opslag").eq("platform", platform).order("oprettet").execute()
+    return res.data or []
 
 
-def gem_inspiration(platform, opslag_liste):
-    fil = INSPIRATION_INSTAGRAM_FILE if platform == "instagram" else INSPIRATION_FACEBOOK_FILE
-    os.makedirs("data", exist_ok=True)
-    with open(fil, "w", encoding="utf-8") as f:
-        json.dump(opslag_liste, f, ensure_ascii=False, indent=2)
+def tilføj_inspiration(platform, opslag_tekst):
+    sb = get_supabase()
+    sb.table("inspiration").insert({"platform": platform, "opslag": opslag_tekst}).execute()
+
+
+def opdater_inspiration(id, opslag_tekst):
+    sb = get_supabase()
+    sb.table("inspiration").update({"opslag": opslag_tekst}).eq("id", id).execute()
+
+
+def slet_inspiration(id):
+    sb = get_supabase()
+    sb.table("inspiration").delete().eq("id", id).execute()
 
 
 def load_historik():
-    try:
-        with open(HISTORIK_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
+    sb = get_supabase()
+    res = sb.table("historik").select("*").order("dato", desc=True).limit(100).execute()
+    return res.data or []
 
 
 def gem_historik(platform, briefing, opslag):
-    historik = load_historik()
-    historik.insert(0, {
+    sb = get_supabase()
+    sb.table("historik").insert({
         "dato": datetime.now().strftime("%d/%m/%Y %H:%M"),
         "platform": platform,
         "briefing": briefing,
         "opslag": opslag
-    })
-    historik = historik[:100]
-    os.makedirs("data", exist_ok=True)
-    with open(HISTORIK_FILE, "w", encoding="utf-8") as f:
-        json.dump(historik, f, ensure_ascii=False, indent=2)
+    }).execute()
 
 
 def load_sider():
+    sb = get_supabase()
     try:
-        with open(SIDER_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return DEFAULT_SIDER
+        res = sb.table("sider").select("id, url").order("url").execute()
+        if res.data:
+            return res.data
+    except:
+        pass
+    return [{"id": None, "url": u} for u in DEFAULT_SIDER]
 
 
-def gem_sider(sider):
-    os.makedirs("data", exist_ok=True)
-    with open(SIDER_FILE, "w", encoding="utf-8") as f:
-        json.dump(sider, f, ensure_ascii=False, indent=2)
+def tilføj_side(url):
+    sb = get_supabase()
+    sb.table("sider").insert({"url": url}).execute()
 
 
+def slet_side(id):
+    sb = get_supabase()
+    sb.table("sider").delete().eq("id", id).execute()
+
+
+def init_sider():
+    sb = get_supabase()
+    res = sb.table("sider").select("url").execute()
+    if not res.data:
+        for url in DEFAULT_SIDER:
+            sb.table("sider").insert({"url": url}).execute()
+
+
+# --- Agent ---
 def build_system_prompt(knowledge, platform):
     retningslinjer = load_retningslinjer()
-    instagram_liste = load_inspiration("instagram")
-    facebook_liste = load_inspiration("facebook")
+    instagram_liste = [i["opslag"] for i in load_inspiration("instagram")]
+    facebook_liste = [i["opslag"] for i in load_inspiration("facebook")]
     maaned = datetime.now().strftime("%B").lower()
     sæson_map = {
         "january":   "januar — vinterstille, få besøgende, ro på museet",
@@ -145,16 +181,10 @@ def build_system_prompt(knowledge, platform):
     inspiration_sektion = ""
     if platform == "Instagram" and instagram_liste:
         formateret = "\n\n---\n\n".join(instagram_liste)
-        inspiration_sektion = f"""
-EKSEMPLER PÅ GODE INSTAGRAM-OPSLAG FRA HJERLHEDE (brug som inspiration til tone og stil):
-{formateret}
-"""
+        inspiration_sektion = f"\nEKSEMPLER PÅ GODE INSTAGRAM-OPSLAG FRA HJERLHEDE:\n{formateret}\n"
     elif platform == "Facebook" and facebook_liste:
         formateret = "\n\n---\n\n".join(facebook_liste)
-        inspiration_sektion = f"""
-EKSEMPLER PÅ GODE FACEBOOK-OPSLAG FRA HJERLHEDE (brug som inspiration til tone og stil):
-{formateret}
-"""
+        inspiration_sektion = f"\nEKSEMPLER PÅ GODE FACEBOOK-OPSLAG FRA HJERLHEDE:\n{formateret}\n"
 
     return f"""
 Du er social media manager for Hjerlhede Frilandsmuseum i Midtjylland.
@@ -181,23 +211,14 @@ def generer_opslag(platform, briefing, ekstra, billedforslag, billede_bytes=None
     if billede_bytes:
         prompt += "\n\nJeg har vedhæftet et billede. Lad dig inspirere af billedets stemning, lys og atmosfære — men beskriv IKKE billedet direkte. Skriv et opslag der vækker den samme følelse som billedet giver, og trækker på Hjerlhedes historie og natur."
 
-    client = anthropic.Anthropic()
+    anthropic_key = st.secrets.get("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
+    client = anthropic.Anthropic(api_key=anthropic_key)
 
     if billede_bytes:
         billede_b64 = base64.standard_b64encode(billede_bytes).decode("utf-8")
         indhold = [
-            {
-                "type": "image",
-                "source": {
-                    "type": "base64",
-                    "media_type": billede_type,
-                    "data": billede_b64
-                }
-            },
-            {
-                "type": "text",
-                "text": prompt
-            }
+            {"type": "image", "source": {"type": "base64", "media_type": billede_type, "data": billede_b64}},
+            {"type": "text", "text": prompt}
         ]
     else:
         indhold = prompt
@@ -227,29 +248,27 @@ def inspiration_sektion_ui(platform_key, platform_label):
     if not inspiration_liste:
         st.info(f"Ingen {platform_label}-opslag tilføjet endnu.")
 
-    slet_index = None
-    for i, opslag_tekst in enumerate(inspiration_liste):
+    slet_id = None
+    for item in inspiration_liste:
         col_tekst, col_slet = st.columns([6, 1])
         with col_tekst:
             opdateret = st.text_area(
-                f"Opslag {i + 1}",
-                value=opslag_tekst,
+                f"Opslag",
+                value=item["opslag"],
                 height=150,
-                key=f"insp_{platform_key}_{i}",
+                key=f"insp_{platform_key}_{item['id']}",
                 label_visibility="collapsed"
             )
-            if opdateret != opslag_tekst:
-                inspiration_liste[i] = opdateret
-                gem_inspiration(platform_key, inspiration_liste)
+            if opdateret != item["opslag"]:
+                opdater_inspiration(item["id"], opdateret)
         with col_slet:
             st.markdown("<div style='margin-top: 8px'>", unsafe_allow_html=True)
-            if st.button("🗑️", key=f"slet_insp_{platform_key}_{i}", help="Slet dette opslag"):
-                slet_index = i
+            if st.button("🗑️", key=f"slet_insp_{item['id']}", help="Slet dette opslag"):
+                slet_id = item["id"]
             st.markdown("</div>", unsafe_allow_html=True)
 
-    if slet_index is not None:
-        inspiration_liste.pop(slet_index)
-        gem_inspiration(platform_key, inspiration_liste)
+    if slet_id:
+        slet_inspiration(slet_id)
         st.rerun()
 
     st.divider()
@@ -262,12 +281,15 @@ def inspiration_sektion_ui(platform_key, platform_label):
     )
     if st.button(f"➕ Tilføj {platform_label}-opslag", type="primary", key=f"tilføj_{platform_key}"):
         if nyt_opslag.strip():
-            inspiration_liste.append(nyt_opslag.strip())
-            gem_inspiration(platform_key, inspiration_liste)
+            tilføj_inspiration(platform_key, nyt_opslag.strip())
             st.success("Opslag tilføjet!")
             st.rerun()
         else:
             st.warning("Skriv et opslag først.")
+
+
+# Initialiser standard sider hvis databasen er tom
+init_sider()
 
 
 # --- UI ---
@@ -375,7 +397,7 @@ with tab2:
         for dato, opslag_liste in grupper.items():
             try:
                 dato_obj = datetime.strptime(dato, "%d/%m/%Y")
-                dansk_dato = dato_obj.strftime("%-d. %B %Y")
+                dansk_dato = dato_obj.strftime("%d. %B %Y")
             except (ValueError, TypeError):
                 dansk_dato = dato
 
@@ -389,24 +411,24 @@ with tab2:
                         value=item["opslag"],
                         height=200,
                         label_visibility="collapsed",
-                        key=f"ta_{item['dato']}"
+                        key=f"ta_{item['id']}"
                     )
                     st.download_button(
                         "⬇️ Download",
                         data=item["opslag"],
                         file_name=f"hjerlhede_{item['platform'].lower()}_{dato}.txt",
-                        key=f"dl_{item['dato']}"
+                        key=f"dl_{item['id']}"
                     )
             st.divider()
 
 with tab3:
     st.subheader("📸 Instagram inspiration")
-    st.markdown("Tilføj gode eksempler på Instagram-opslag fra Hjerlhede. Agenten lærer tone og stil fra dem når du genererer Instagram-opslag.")
+    st.markdown("Tilføj gode eksempler på Instagram-opslag fra Hjerlhede. Agenten lærer tone og stil fra dem.")
     inspiration_sektion_ui("instagram", "Instagram")
 
 with tab4:
     st.subheader("👍 Facebook inspiration")
-    st.markdown("Tilføj gode eksempler på Facebook-opslag fra Hjerlhede. Agenten lærer tone og stil fra dem når du genererer Facebook-opslag.")
+    st.markdown("Tilføj gode eksempler på Facebook-opslag fra Hjerlhede. Agenten lærer tone og stil fra dem.")
     inspiration_sektion_ui("facebook", "Facebook")
 
 with tab5:
@@ -424,40 +446,37 @@ with tab5:
     )
 
     if st.button("💾 Gem retningslinjer", type="primary"):
-        with open("retningslinjer.txt", "w", encoding="utf-8") as f:
-            f.write(nye_retningslinjer)
-        st.success("Retningslinjer gemt! Agenten bruger dem fra næste generering.")
+        gem_retningslinjer(nye_retningslinjer)
+        st.success("Retningslinjer gemt!")
 
     st.divider()
 
     st.markdown("### 🌐 Sider der scrapers")
-    st.markdown("Tilføj eller fjern sider fra vidensbasen. Tryk **Opdater vidensbase** bagefter for at hente ny tekst.")
+    st.markdown("Tilføj eller fjern sider fra vidensbasen. Tryk **Opdater vidensbase** bagefter.")
 
     sider = load_sider()
+    slet_side_id = None
 
-    sider_der_skal_slettes = []
-    for i, url in enumerate(sider):
+    for side in sider:
         col_url, col_del = st.columns([6, 1])
         with col_url:
-            st.text(url)
+            st.text(side["url"])
         with col_del:
-            if st.button("🗑️", key=f"slet_{i}", help="Fjern denne side"):
-                sider_der_skal_slettes.append(url)
+            if st.button("🗑️", key=f"slet_side_{side['id']}", help="Fjern denne side"):
+                slet_side_id = side["id"]
 
-    for url in sider_der_skal_slettes:
-        sider.remove(url)
-        gem_sider(sider)
+    if slet_side_id:
+        slet_side(slet_side_id)
         st.rerun()
 
     st.markdown("**Tilføj ny side:**")
     ny_url = st.text_input("URL", placeholder="https://hjerlhede.dk/oplevelse/ny-side/")
     if st.button("➕ Tilføj side"):
-        if ny_url and ny_url not in sider:
-            sider.append(ny_url.strip())
-            gem_sider(sider)
+        if ny_url and ny_url not in [s["url"] for s in sider]:
+            tilføj_side(ny_url.strip())
             st.success(f"Tilføjet: {ny_url}")
             st.rerun()
-        elif ny_url in sider:
+        elif ny_url in [s["url"] for s in sider]:
             st.warning("Siden er allerede på listen.")
 
     st.divider()

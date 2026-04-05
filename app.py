@@ -170,20 +170,20 @@ def build_system_prompt(knowledge, platform):
     inspiration_sektion = ""
     if platform == "Instagram" and instagram_liste:
         formateret = "\n\n---\n\n".join(instagram_liste)
-        inspiration_sektion = f"\nEKSEMPLER PÅ GODE INSTAGRAM-OPSLAG FRA HJERLHEDE:\n{formateret}\n"
+        inspiration_sektion = f"\nEKSEMPLER PÅ GODE INSTAGRAM-OPSLAG FRA HJERL HEDE:\n{formateret}\n"
     elif platform == "Facebook" and facebook_liste:
         formateret = "\n\n---\n\n".join(facebook_liste)
-        inspiration_sektion = f"\nEKSEMPLER PÅ GODE FACEBOOK-OPSLAG FRA HJERLHEDE:\n{formateret}\n"
+        inspiration_sektion = f"\nEKSEMPLER PÅ GODE FACEBOOK-OPSLAG FRA HJERL HEDE:\n{formateret}\n"
 
     return f"""
-Du er social media manager for Hjerlhede Frilandsmuseum i Midtjylland.
+Du er social media manager for Hjerl Hede Frilandsmuseum i Midtjylland.
 
 AKTUEL SÆSON: {sæson}
 
 RETNINGSLINJER:
 {retningslinjer}
 {inspiration_sektion}
-VIDEN OM HJERLHEDE (hentet direkte fra hjerlhede.dk):
+VIDEN OM HJERL HEDE (hentet direkte fra hjerlhede.dk):
 {knowledge}
 """
 
@@ -198,7 +198,7 @@ def generer_opslag(platform, briefing, ekstra, billedforslag, billede_bytes=None
     if billedforslag:
         prompt += "\n\nTilføj til sidst et kort billedforslag på én linje der starter med 'BILLEDFORSLAG:'"
     if billede_bytes:
-        prompt += "\n\nJeg har vedhæftet et billede. Lad dig inspirere af billedets stemning, lys og atmosfære — men beskriv IKKE billedet direkte. Skriv et opslag der vækker den samme følelse som billedet giver, og trækker på Hjerlhedes historie og natur."
+        prompt += "\n\nJeg har vedhæftet et billede. Lad dig inspirere af billedets stemning, lys og atmosfære — men beskriv IKKE billedet direkte. Skriv et opslag der vækker den samme følelse som billedet giver, og trækker på Hjerl Hedes historie og natur."
 
     anthropic_key = st.secrets.get("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
     client = anthropic.Anthropic(api_key=anthropic_key)
@@ -400,11 +400,11 @@ def hjerlhede_agent():
                 st.divider()
 
     with tab3:
-        st.markdown("Tilføj gode eksempler på Instagram-opslag fra Hjerlhede. Agenten lærer tone og stil fra dem.")
+        st.markdown("Tilføj gode eksempler på Instagram-opslag fra Hjerl Hede. Agenten lærer tone og stil fra dem.")
         inspiration_sektion_ui("instagram", "Instagram")
 
     with tab4:
-        st.markdown("Tilføj gode eksempler på Facebook-opslag fra Hjerlhede. Agenten lærer tone og stil fra dem.")
+        st.markdown("Tilføj gode eksempler på Facebook-opslag fra Hjerl Hede. Agenten lærer tone og stil fra dem.")
         inspiration_sektion_ui("facebook", "Facebook")
 
     with tab5:
@@ -469,5 +469,5 @@ if "aktiv_agent" not in st.session_state:
 
 # --- Vis aktiv agent ---
 if st.session_state["aktiv_agent"] == "hjerlhede":
-    st.header("Hjerlhede Frilandsmuseum")
+    st.header("Hjerl Hede Frilandsmuseum")
     hjerlhede_agent()

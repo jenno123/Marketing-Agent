@@ -44,7 +44,7 @@ def check_password():
         st.session_state.authenticated = False
     if st.session_state.authenticated:
         return True
-    st.title("🌿 Hjerlhede Marketing Agent")
+    st.title("🌿 Hjerl Hede Marketing Agent")
     st.markdown("Log ind for at fortsætte.")
     kodeord = st.text_input("Kodeord", type="password")
     if st.button("Log ind", type="primary"):
@@ -451,30 +451,9 @@ with tab5:
 
     st.divider()
 
-    st.markdown("### 🌐 Sider der scrapers")
-    st.markdown("Tilføj eller fjern sider fra vidensbasen. Tryk **Opdater vidensbase** bagefter.")
+    st.markdown("### 🌐 Datakilder")
+    st.markdown("Agenten henter sin viden fra disse sider:")
 
     sider = load_sider()
-    slet_side_id = None
-
     for side in sider:
-        col_url, col_del = st.columns([6, 1])
-        with col_url:
-            st.text(side["url"])
-        with col_del:
-            if st.button("🗑️", key=f"slet_side_{side['id']}", help="Fjern denne side"):
-                slet_side_id = side["id"]
-
-    if slet_side_id:
-        slet_side(slet_side_id)
-        st.rerun()
-
-    st.markdown("**Tilføj ny side:**")
-    ny_url = st.text_input("URL", placeholder="https://hjerlhede.dk/oplevelse/ny-side/")
-    if st.button("➕ Tilføj side"):
-        if ny_url and ny_url not in [s["url"] for s in sider]:
-            tilføj_side(ny_url.strip())
-            st.success(f"Tilføjet: {ny_url}")
-            st.rerun()
-        elif ny_url in [s["url"] for s in sider]:
-            st.warning("Siden er allerede på listen.")
+        st.text(side["url"])

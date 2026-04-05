@@ -4,7 +4,6 @@ import json
 import os
 import base64
 import hmac
-import subprocess
 from supabase import create_client
 from dotenv import load_dotenv
 from datetime import datetime
@@ -44,7 +43,7 @@ def check_password():
         st.session_state.authenticated = False
     if st.session_state.authenticated:
         return True
-    st.title("🌿 Hjerl Hede Marketing Agent")
+    st.title("Marketing Agent")
     st.markdown("Log ind for at fortsætte.")
     kodeord = st.text_input("Kodeord", type="password")
     if st.button("Log ind", type="primary"):
@@ -136,16 +135,6 @@ def load_sider():
     except:
         pass
     return [{"id": None, "url": u} for u in DEFAULT_SIDER]
-
-
-def tilføj_side(url):
-    sb = get_supabase()
-    sb.table("sider").insert({"url": url}).execute()
-
-
-def slet_side(id):
-    sb = get_supabase()
-    sb.table("sider").delete().eq("id", id).execute()
 
 
 def init_sider():
@@ -263,7 +252,7 @@ def inspiration_sektion_ui(platform_key, platform_label):
                 opdater_inspiration(item["id"], opdateret)
         with col_slet:
             st.markdown("<div style='margin-top: 8px'>", unsafe_allow_html=True)
-            if st.button("🗑️", key=f"slet_insp_{item['id']}", help="Slet dette opslag"):
+            if st.button("Slet", key=f"slet_insp_{item['id']}"):
                 slet_id = item["id"]
             st.markdown("</div>", unsafe_allow_html=True)
 
@@ -279,7 +268,7 @@ def inspiration_sektion_ui(platform_key, platform_label):
         placeholder=f"Indsæt et eksisterende {platform_label}-opslag...",
         key=f"nyt_{platform_key}_opslag"
     )
-    if st.button(f"➕ Tilføj {platform_label}-opslag", type="primary", key=f"tilføj_{platform_key}"):
+    if st.button(f"Tilføj {platform_label}-opslag", type="primary", key=f"tilføj_{platform_key}"):
         if nyt_opslag.strip():
             tilføj_inspiration(platform_key, nyt_opslag.strip())
             st.success("Opslag tilføjet!")
@@ -288,28 +277,43 @@ def inspiration_sektion_ui(platform_key, platform_label):
             st.warning("Skriv et opslag først.")
 
 
-# Initialiser standard sider hvis databasen er tom
 init_sider()
 
 
-# --- UI ---
-st.set_page_config(page_title="Hjerlhede Marketing Agent", page_icon="🌿", layout="wide")
-st.title("🌿 Hjerlhede Marketing Agent")
+# --- Sidebar navigation ---
+st.set_page_config(page_title="Marketing Agent", page_icon=None, layout="wide")
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "✍️ Generer opslag",
-    "📋 Historik",
-    "📸 Instagram inspiration",
-    "👍 Facebook inspiration",
-    "⚙️ Indstillinger"
-])
+with st.sidebar:
+    st.markdown("## Marketing Agent")
+    st.divider()
 
-with tab1:
+    st.markdown("**Sociale medier**")
+
+    with st.expander("Hjerlhede Frilandsmuseum", expanded=True):
+        valg = st.radio(
+            "Hjerlhede navigation",
+            ["Generer opslag", "Historik", "Instagram inspiration", "Facebook inspiration", "Indstillinger"],
+            label_visibility="collapsed",
+            key="hjerlhede_nav"
+        )
+
+    st.divider()
+    st.markdown("**Kommer snart**")
+
+    with st.expander("Museum 2", expanded=False):
+        st.caption("Denne agent er ikke oprettet endnu.")
+
+    with st.expander("Nyhedsbrev", expanded=False):
+        st.caption("Denne agent er ikke oprettet endnu.")
+
+
+# --- Hovedindhold ---
+if valg == "Generer opslag":
+    st.header("Hjerlhede — Generer opslag")
+
     col1, col2 = st.columns([1, 1])
 
     with col1:
-        st.subheader("Indstillinger")
-
         platform = st.selectbox("Platform", ["Facebook", "Instagram", "LinkedIn"])
 
         briefing = st.text_area(
@@ -335,7 +339,7 @@ with tab1:
         if uploadet_billede:
             st.image(uploadet_billede, use_container_width=True)
 
-        generer_btn = st.button("✨ Generer opslag", type="primary", use_container_width=True)
+        generer_btn = st.button("Generer opslag", type="primary", use_container_width=True)
 
     with col2:
         st.subheader("Genereret opslag")
@@ -364,14 +368,14 @@ with tab1:
             kol1, kol2 = st.columns(2)
             with kol1:
                 st.download_button(
-                    "⬇️ Download",
+                    "Download",
                     data=opslag,
                     file_name=f"hjerlhede_{st.session_state['sidste_platform'].lower()}.txt",
                     mime="text/plain",
                     use_container_width=True
                 )
             with kol2:
-                if st.button("🔁 Regenerer", use_container_width=True):
+                if st.button("Regenerer", use_container_width=True):
                     with st.spinner("Genererer nyt bud..."):
                         nyt_opslag = generer_opslag(
                             st.session_state["sidste_platform"],
@@ -386,8 +390,8 @@ with tab1:
                     )
                     st.rerun()
 
-with tab2:
-    st.subheader("📋 Historik")
+elif valg == "Historik":
+    st.header("Hjerlhede — Historik")
     historik = load_historik()
 
     if not historik:
@@ -401,7 +405,7 @@ with tab2:
             except (ValueError, TypeError):
                 dansk_dato = dato
 
-            st.markdown(f"### 📅 {dansk_dato}")
+            st.markdown(f"### {dansk_dato}")
             for item in opslag_liste:
                 tidspunkt = item["dato"][11:]
                 label = f"{tidspunkt} — {item['platform']} — {item['briefing'][:60]}"
@@ -414,27 +418,27 @@ with tab2:
                         key=f"ta_{item['id']}"
                     )
                     st.download_button(
-                        "⬇️ Download",
+                        "Download",
                         data=item["opslag"],
                         file_name=f"hjerlhede_{item['platform'].lower()}_{dato}.txt",
                         key=f"dl_{item['id']}"
                     )
             st.divider()
 
-with tab3:
-    st.subheader("📸 Instagram inspiration")
+elif valg == "Instagram inspiration":
+    st.header("Hjerlhede — Instagram inspiration")
     st.markdown("Tilføj gode eksempler på Instagram-opslag fra Hjerlhede. Agenten lærer tone og stil fra dem.")
     inspiration_sektion_ui("instagram", "Instagram")
 
-with tab4:
-    st.subheader("👍 Facebook inspiration")
+elif valg == "Facebook inspiration":
+    st.header("Hjerlhede — Facebook inspiration")
     st.markdown("Tilføj gode eksempler på Facebook-opslag fra Hjerlhede. Agenten lærer tone og stil fra dem.")
     inspiration_sektion_ui("facebook", "Facebook")
 
-with tab5:
-    st.subheader("⚙️ Indstillinger")
+elif valg == "Indstillinger":
+    st.header("Hjerlhede — Indstillinger")
 
-    st.markdown("### 📝 Retningslinjer")
+    st.markdown("### Retningslinjer")
     st.markdown("Rediger agentens tone, regler og platformsregler direkte her.")
 
     nuværende_retningslinjer = load_retningslinjer()
@@ -445,15 +449,26 @@ with tab5:
         label_visibility="collapsed"
     )
 
-    if st.button("💾 Gem retningslinjer", type="primary"):
+    if st.button("Gem retningslinjer", type="primary"):
         gem_retningslinjer(nye_retningslinjer)
         st.success("Retningslinjer gemt!")
 
     st.divider()
 
-    st.markdown("### 🌐 Datakilder")
+    st.markdown("### Datakilder")
     st.markdown("Agenten henter sin viden fra disse sider:")
 
     sider = load_sider()
     for side in sider:
-        st.text(side["url"])
+        st.markdown(f"""
+        <div style="
+            padding: 10px 16px;
+            margin: 6px 0;
+            border-radius: 8px;
+            border: 1px solid rgba(128,128,128,0.2);
+            font-size: 14px;
+            font-family: monospace;
+        ">
+            {side["url"]}
+        </div>
+        """, unsafe_allow_html=True)

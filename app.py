@@ -7,6 +7,29 @@ import subprocess
 from dotenv import load_dotenv
 from datetime import datetime
 
+import hmac
+
+def check_password():
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+
+    if st.session_state.authenticated:
+        return True
+
+    st.title("🌿 Hjerlhede Marketing Agent")
+    st.markdown("Log ind for at fortsætte.")
+    kodeord = st.text_input("Kodeord", type="password")
+    if st.button("Log ind", type="primary"):
+        if hmac.compare_digest(kodeord, st.secrets["APP_PASSWORD"]):
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("Forkert kodeord.")
+    return False
+
+if not check_password():
+    st.stop()
+
 load_dotenv()
 
 KNOWLEDGE_FILE = "data/hjerlhede_knowledge.txt"

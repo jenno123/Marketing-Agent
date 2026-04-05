@@ -478,18 +478,3 @@ with tab5:
             st.rerun()
         elif ny_url in [s["url"] for s in sider]:
             st.warning("Siden er allerede på listen.")
-
-    st.divider()
-
-    st.markdown("### 🔄 Opdater vidensbase")
-    st.markdown("Henter ny tekst fra alle sider på listen ovenfor.")
-    if st.button("Kør scraper", type="primary", use_container_width=True):
-        with st.spinner("Scraper sider..."):
-            result = subprocess.run(
-                ["python", "scraper.py"],
-                capture_output=True, text=True
-            )
-        if result.returncode == 0:
-            st.success("Vidensbase opdateret!")
-        else:
-            st.error(f"Fejl: {result.stderr}")

@@ -277,198 +277,197 @@ def inspiration_sektion_ui(platform_key, platform_label):
             st.warning("Skriv et opslag først.")
 
 
+def hjerlhede_agent():
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "Generer opslag",
+        "Historik",
+        "Instagram inspiration",
+        "Facebook inspiration",
+        "Indstillinger"
+    ])
+
+    with tab1:
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            platform = st.selectbox("Platform", ["Facebook", "Instagram", "LinkedIn"])
+
+            briefing = st.text_area(
+                "Hvad skal opslaget handle om?",
+                placeholder="F.eks. skovtur for børnefamilier i juni, åbning af sæsonen...",
+                height=100
+            )
+
+            ekstra = st.text_area(
+                "Ekstra retningslinjer (valgfrit)",
+                placeholder="F.eks. nævn at det er gratis for børn under 5...",
+                height=80
+            )
+
+            billedforslag = st.toggle("Tilføj billedforslag", value=True)
+
+            uploadet_billede = st.file_uploader(
+                "Upload billede (valgfrit)",
+                type=["jpg", "jpeg", "png", "webp"],
+                help="Agenten analyserer billedets stemning og bruger det i opslaget"
+            )
+
+            if uploadet_billede:
+                st.image(uploadet_billede, use_container_width=True)
+
+            generer_btn = st.button("Generer opslag", type="primary", use_container_width=True)
+
+        with col2:
+            st.subheader("Genereret opslag")
+
+            if generer_btn:
+                if not briefing and not uploadet_billede:
+                    st.warning("Skriv hvad opslaget skal handle om, eller upload et billede.")
+                else:
+                    with st.spinner("Genererer opslag..."):
+                        if uploadet_billede:
+                            billede_bytes = uploadet_billede.read()
+                            billede_type = uploadet_billede.type
+                        else:
+                            billede_bytes = None
+                            billede_type = None
+                        opslag = generer_opslag(platform, briefing, ekstra, billedforslag, billede_bytes, billede_type)
+                    st.session_state["sidste_opslag"] = opslag
+                    st.session_state["sidste_platform"] = platform
+                    st.session_state["sidste_briefing"] = briefing
+                    gem_historik(platform, briefing, opslag)
+
+            if "sidste_opslag" in st.session_state:
+                opslag = st.session_state["sidste_opslag"]
+                st.text_area("", value=opslag, height=350, label_visibility="collapsed")
+
+                kol1, kol2 = st.columns(2)
+                with kol1:
+                    st.download_button(
+                        "Download",
+                        data=opslag,
+                        file_name=f"hjerlhede_{st.session_state['sidste_platform'].lower()}.txt",
+                        mime="text/plain",
+                        use_container_width=True
+                    )
+                with kol2:
+                    if st.button("Regenerer", use_container_width=True):
+                        with st.spinner("Genererer nyt bud..."):
+                            nyt_opslag = generer_opslag(
+                                st.session_state["sidste_platform"],
+                                st.session_state["sidste_briefing"],
+                                "", billedforslag
+                            )
+                        st.session_state["sidste_opslag"] = nyt_opslag
+                        gem_historik(
+                            st.session_state["sidste_platform"],
+                            st.session_state["sidste_briefing"],
+                            nyt_opslag
+                        )
+                        st.rerun()
+
+    with tab2:
+        historik = load_historik()
+        if not historik:
+            st.info("Ingen opslag endnu — generer dit første ovenfor.")
+        else:
+            grupper = grupper_historik_efter_dato(historik)
+            for dato, opslag_liste in grupper.items():
+                try:
+                    dato_obj = datetime.strptime(dato, "%d/%m/%Y")
+                    dansk_dato = dato_obj.strftime("%d. %B %Y")
+                except (ValueError, TypeError):
+                    dansk_dato = dato
+
+                st.markdown(f"### {dansk_dato}")
+                for item in opslag_liste:
+                    tidspunkt = item["dato"][11:]
+                    label = f"{tidspunkt} — {item['platform']} — {item['briefing'][:60]}"
+                    with st.expander(label):
+                        st.text_area(
+                            "",
+                            value=item["opslag"],
+                            height=200,
+                            label_visibility="collapsed",
+                            key=f"ta_{item['id']}"
+                        )
+                        st.download_button(
+                            "Download",
+                            data=item["opslag"],
+                            file_name=f"hjerlhede_{item['platform'].lower()}_{dato}.txt",
+                            key=f"dl_{item['id']}"
+                        )
+                st.divider()
+
+    with tab3:
+        st.markdown("Tilføj gode eksempler på Instagram-opslag fra Hjerlhede. Agenten lærer tone og stil fra dem.")
+        inspiration_sektion_ui("instagram", "Instagram")
+
+    with tab4:
+        st.markdown("Tilføj gode eksempler på Facebook-opslag fra Hjerlhede. Agenten lærer tone og stil fra dem.")
+        inspiration_sektion_ui("facebook", "Facebook")
+
+    with tab5:
+        st.markdown("### Retningslinjer")
+        nuværende_retningslinjer = load_retningslinjer()
+        nye_retningslinjer = st.text_area(
+            "Retningslinjer",
+            value=nuværende_retningslinjer,
+            height=400,
+            label_visibility="collapsed"
+        )
+        if st.button("Gem retningslinjer", type="primary"):
+            gem_retningslinjer(nye_retningslinjer)
+            st.success("Retningslinjer gemt!")
+
+        st.divider()
+        st.markdown("### Datakilder")
+        st.markdown("Agenten henter sin viden fra disse sider:")
+        sider = load_sider()
+        for side in sider:
+            st.markdown(f"""
+            <div style="
+                padding: 10px 16px;
+                margin: 6px 0;
+                border-radius: 8px;
+                border: 1px solid rgba(128,128,128,0.2);
+                font-size: 14px;
+                font-family: monospace;
+            ">
+                {side["url"]}
+            </div>
+            """, unsafe_allow_html=True)
+
+
+# --- Setup ---
+st.set_page_config(page_title="Marketing Agent", layout="wide")
 init_sider()
 
-
-# --- Sidebar navigation ---
-st.set_page_config(page_title="Marketing Agent", page_icon=None, layout="wide")
-
+# --- Sidebar ---
 with st.sidebar:
     st.markdown("## Marketing Agent")
     st.divider()
 
     st.markdown("**Sociale medier**")
 
-    with st.expander("Hjerlhede Frilandsmuseum", expanded=True):
-        valg = st.radio(
-            "Hjerlhede navigation",
-            ["Generer opslag", "Historik", "Instagram inspiration", "Facebook inspiration", "Indstillinger"],
-            label_visibility="collapsed",
-            key="hjerlhede_nav"
-        )
-
-    st.divider()
-    st.markdown("**Kommer snart**")
+    with st.expander("Hjerl Hede Frilandsmuseum", expanded=True):
+        if st.button("Gå til agent", key="hjerlhede_btn", use_container_width=True):
+            st.session_state["aktiv_agent"] = "hjerlhede"
 
     with st.expander("Museum 2", expanded=False):
         st.caption("Denne agent er ikke oprettet endnu.")
 
+    st.divider()
+    st.markdown("**Nyhedsbreve**")
+
     with st.expander("Nyhedsbrev", expanded=False):
         st.caption("Denne agent er ikke oprettet endnu.")
 
+# Sæt standard agent
+if "aktiv_agent" not in st.session_state:
+    st.session_state["aktiv_agent"] = "hjerlhede"
 
-# --- Hovedindhold ---
-if valg == "Generer opslag":
-    st.header("Hjerlhede — Generer opslag")
-
-    col1, col2 = st.columns([1, 1])
-
-    with col1:
-        platform = st.selectbox("Platform", ["Facebook", "Instagram", "LinkedIn"])
-
-        briefing = st.text_area(
-            "Hvad skal opslaget handle om?",
-            placeholder="F.eks. skovtur for børnefamilier i juni, åbning af sæsonen...",
-            height=100
-        )
-
-        ekstra = st.text_area(
-            "Ekstra retningslinjer (valgfrit)",
-            placeholder="F.eks. nævn at det er gratis for børn under 5...",
-            height=80
-        )
-
-        billedforslag = st.toggle("Tilføj billedforslag", value=True)
-
-        uploadet_billede = st.file_uploader(
-            "Upload billede (valgfrit)",
-            type=["jpg", "jpeg", "png", "webp"],
-            help="Agenten analyserer billedets stemning og bruger det i opslaget"
-        )
-
-        if uploadet_billede:
-            st.image(uploadet_billede, use_container_width=True)
-
-        generer_btn = st.button("Generer opslag", type="primary", use_container_width=True)
-
-    with col2:
-        st.subheader("Genereret opslag")
-
-        if generer_btn:
-            if not briefing and not uploadet_billede:
-                st.warning("Skriv hvad opslaget skal handle om, eller upload et billede.")
-            else:
-                with st.spinner("Genererer opslag..."):
-                    if uploadet_billede:
-                        billede_bytes = uploadet_billede.read()
-                        billede_type = uploadet_billede.type
-                    else:
-                        billede_bytes = None
-                        billede_type = None
-                    opslag = generer_opslag(platform, briefing, ekstra, billedforslag, billede_bytes, billede_type)
-                st.session_state["sidste_opslag"] = opslag
-                st.session_state["sidste_platform"] = platform
-                st.session_state["sidste_briefing"] = briefing
-                gem_historik(platform, briefing, opslag)
-
-        if "sidste_opslag" in st.session_state:
-            opslag = st.session_state["sidste_opslag"]
-            st.text_area("", value=opslag, height=350, label_visibility="collapsed")
-
-            kol1, kol2 = st.columns(2)
-            with kol1:
-                st.download_button(
-                    "Download",
-                    data=opslag,
-                    file_name=f"hjerlhede_{st.session_state['sidste_platform'].lower()}.txt",
-                    mime="text/plain",
-                    use_container_width=True
-                )
-            with kol2:
-                if st.button("Regenerer", use_container_width=True):
-                    with st.spinner("Genererer nyt bud..."):
-                        nyt_opslag = generer_opslag(
-                            st.session_state["sidste_platform"],
-                            st.session_state["sidste_briefing"],
-                            "", billedforslag
-                        )
-                    st.session_state["sidste_opslag"] = nyt_opslag
-                    gem_historik(
-                        st.session_state["sidste_platform"],
-                        st.session_state["sidste_briefing"],
-                        nyt_opslag
-                    )
-                    st.rerun()
-
-elif valg == "Historik":
-    st.header("Hjerlhede — Historik")
-    historik = load_historik()
-
-    if not historik:
-        st.info("Ingen opslag endnu — generer dit første ovenfor.")
-    else:
-        grupper = grupper_historik_efter_dato(historik)
-        for dato, opslag_liste in grupper.items():
-            try:
-                dato_obj = datetime.strptime(dato, "%d/%m/%Y")
-                dansk_dato = dato_obj.strftime("%d. %B %Y")
-            except (ValueError, TypeError):
-                dansk_dato = dato
-
-            st.markdown(f"### {dansk_dato}")
-            for item in opslag_liste:
-                tidspunkt = item["dato"][11:]
-                label = f"{tidspunkt} — {item['platform']} — {item['briefing'][:60]}"
-                with st.expander(label):
-                    st.text_area(
-                        "",
-                        value=item["opslag"],
-                        height=200,
-                        label_visibility="collapsed",
-                        key=f"ta_{item['id']}"
-                    )
-                    st.download_button(
-                        "Download",
-                        data=item["opslag"],
-                        file_name=f"hjerlhede_{item['platform'].lower()}_{dato}.txt",
-                        key=f"dl_{item['id']}"
-                    )
-            st.divider()
-
-elif valg == "Instagram inspiration":
-    st.header("Hjerlhede — Instagram inspiration")
-    st.markdown("Tilføj gode eksempler på Instagram-opslag fra Hjerlhede. Agenten lærer tone og stil fra dem.")
-    inspiration_sektion_ui("instagram", "Instagram")
-
-elif valg == "Facebook inspiration":
-    st.header("Hjerlhede — Facebook inspiration")
-    st.markdown("Tilføj gode eksempler på Facebook-opslag fra Hjerlhede. Agenten lærer tone og stil fra dem.")
-    inspiration_sektion_ui("facebook", "Facebook")
-
-elif valg == "Indstillinger":
-    st.header("Hjerlhede — Indstillinger")
-
-    st.markdown("### Retningslinjer")
-    st.markdown("Rediger agentens tone, regler og platformsregler direkte her.")
-
-    nuværende_retningslinjer = load_retningslinjer()
-    nye_retningslinjer = st.text_area(
-        "Retningslinjer",
-        value=nuværende_retningslinjer,
-        height=400,
-        label_visibility="collapsed"
-    )
-
-    if st.button("Gem retningslinjer", type="primary"):
-        gem_retningslinjer(nye_retningslinjer)
-        st.success("Retningslinjer gemt!")
-
-    st.divider()
-
-    st.markdown("### Datakilder")
-    st.markdown("Agenten henter sin viden fra disse sider:")
-
-    sider = load_sider()
-    for side in sider:
-        st.markdown(f"""
-        <div style="
-            padding: 10px 16px;
-            margin: 6px 0;
-            border-radius: 8px;
-            border: 1px solid rgba(128,128,128,0.2);
-            font-size: 14px;
-            font-family: monospace;
-        ">
-            {side["url"]}
-        </div>
-        """, unsafe_allow_html=True)
+# --- Vis aktiv agent ---
+if st.session_state["aktiv_agent"] == "hjerlhede":
+    st.header("Hjerlhede Frilandsmuseum")
+    hjerlhede_agent()

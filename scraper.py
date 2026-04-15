@@ -68,7 +68,7 @@ MUSEUMS = {
 def scrape_page(url):
     """Henter og renser tekst fra en URL."""
     try:
-        headers = {"User-Agent": "Mozilla/5.0 (compatible; MuseumScraper/1.0)"}
+        headers = {"User-Agent": "MuseumScraper/1.0 (kontakt: din@email.dk)"}
         response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
@@ -99,7 +99,7 @@ def scrape_museum(name, config):
         text = scrape_page(url)
         if text:
             all_text.append(f"--- KILDE: {url} ---\n{text}")
-        time.sleep(1)  # Vær venlig mod serverne
+        time.sleep(2)  # Vær venlig mod serverne
 
     output = "\n\n".join(all_text)
 

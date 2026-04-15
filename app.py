@@ -1,6 +1,8 @@
 import streamlit as st
 from helpers import check_password, init_sider
 from hjerlhede_agent import hjerlhede_agent
+from holstebro_agent import holstebro_agent
+from strandingsmuseum_agent import strandingsmuseum_agent
 from nyhedsbrev_agent import nyhedsbrev_agent
 
 st.set_page_config(page_title="Marketing Agent", layout="wide")
@@ -22,8 +24,15 @@ with st.sidebar:
             st.session_state["aktiv_agent"] = "hjerlhede"
             st.rerun()
 
-    with st.expander("Museum 2", expanded=False):
-        st.caption("Denne agent er ikke oprettet endnu.")
+    with st.expander("Holstebro Museum", expanded=False):
+        if st.button("Gå til agent", key="holstebro_btn", use_container_width=True):
+            st.session_state["aktiv_agent"] = "holstebro"
+            st.rerun()
+
+    with st.expander("Strandingsmuseum St. George", expanded=False):
+        if st.button("Gå til agent", key="strandingsmuseum_btn", use_container_width=True):
+            st.session_state["aktiv_agent"] = "strandingsmuseum"
+            st.rerun()
 
     st.divider()
     st.markdown("**Nyhedsbreve**")
@@ -41,6 +50,12 @@ if "aktiv_agent" not in st.session_state:
 if st.session_state["aktiv_agent"] == "hjerlhede":
     st.header("Hjerl Hede Frilandsmuseum")
     hjerlhede_agent()
+elif st.session_state["aktiv_agent"] == "holstebro":
+    st.header("Holstebro Museum")
+    holstebro_agent()
+elif st.session_state["aktiv_agent"] == "strandingsmuseum":
+    st.header("Strandingsmuseum St. George")
+    strandingsmuseum_agent()
 elif st.session_state["aktiv_agent"] == "nyhedsbrev":
     st.header("Hjerl Hede - Nyhedsbrev")
     nyhedsbrev_agent()

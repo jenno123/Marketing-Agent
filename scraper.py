@@ -1,78 +1,128 @@
+"""
+Scraper til alle tre museer.
+Kør lokalt: python scraper.py
+Genererer tre filer i data/:
+  - hjerlhede_knowledge.txt
+  - holstebro_knowledge.txt
+  - strandingsmuseum_knowledge.txt
+"""
+
 import requests
 from bs4 import BeautifulSoup
-import time
 import os
-import json
+import time
 
-OUTPUT_FILE = "data/hjerlhede_knowledge.txt"
-SIDER_FILE = "data/sider.json"
-
-DEFAULT_SIDER = [
-    "https://www.hjerlhede.dk",
-    "https://www.hjerlhede.dk/om-hjerlhede",
-    "https://www.hjerlhede.dk/besog",
-    "https://www.hjerlhede.dk/aktiviteter",
-    "https://www.hjerlhede.dk/historien",
-    "https://www.hjerlhede.dk/billetter",
-    "https://www.hjerlhede.dk/skoler",
-    "https://www.hjerlhede.dk/grupper",
-    "https://www.hjerlhede.dk/kontakt",
-    "https://hjerlhede.dk/oplevelse/historiske-huse-og-bygninger/",
-    "https://hjerlhede.dk/oplevelse/vip-tur-med-hestevogn-ud-over-heden/",
-    "https://hjerlhede.dk/oplevelse/det-legende-menneske-gennem-tiden/",
-    "https://hjerlhede.dk/oplevelse/vi-aabner-for-saesonen-1-maj-2026/",
-    "https://da.wikipedia.org/wiki/Frilandsmuseet_Hjerl_Hede",
-]
-
-
-def load_sider():
-    try:
-        with open(SIDER_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return DEFAULT_SIDER
+MUSEUMS = {
+    "hjerlhede": {
+        "file": "data/hjerlhede_knowledge.txt",
+        "urls": [
+            "https://www.hjerlhede.dk",
+            "https://www.hjerlhede.dk/om-hjerlhede",
+            "https://www.hjerlhede.dk/besog",
+            "https://www.hjerlhede.dk/aktiviteter",
+            "https://www.hjerlhede.dk/historien",
+            "https://www.hjerlhede.dk/billetter",
+            "https://www.hjerlhede.dk/skoler",
+            "https://www.hjerlhede.dk/grupper",
+            "https://www.hjerlhede.dk/kontakt",
+            "https://hjerlhede.dk/oplevelse/historiske-huse-og-bygninger/",
+            "https://hjerlhede.dk/oplevelse/vip-tur-med-hestevogn-ud-over-heden/",
+            "https://hjerlhede.dk/oplevelse/det-legende-menneske-gennem-tiden/",
+            "https://hjerlhede.dk/oplevelse/vi-aabner-for-saesonen-1-maj-2026/",
+            "https://da.wikipedia.org/wiki/Frilandsmuseet_Hjerl_Hede",
+        ]
+    },
+    "holstebro": {
+        "file": "data/holstebro_knowledge.txt",
+        "urls": [
+            "https://holstebro-museum.dk/",
+            "https://holstebro-museum.dk/oplevelser/",
+            "https://holstebro-museum.dk/priser-og-aabningstider/",
+            "https://holstebro-museum.dk/foer-dit-besoeg/",
+            "https://holstebro-museum.dk/skoler-og-grupper/",
+            "https://holstebro-museum.dk/undervisningsforloeb/",
+            "https://holstebro-museum.dk/cafe-museum/",
+            "https://holstebro-museum.dk/kontakt-os/",
+            "https://holstebro-museum.dk/holstebro-museumsforening/",
+            "https://da.wikipedia.org/wiki/Holstebro_Museum",
+        ]
+    },
+    "strandingsmuseum": {
+        "file": "data/strandingsmuseum_knowledge.txt",
+        "urls": [
+            "https://strandingsmuseet.dk/",
+            "https://strandingsmuseet.dk/oplevelser/",
+            "https://strandingsmuseet.dk/priser-og-aabningstider/",
+            "https://strandingsmuseet.dk/skoler-og-grupper/",
+            "https://strandingsmuseet.dk/tilgaengelighed/",
+            "https://strandingsmuseet.dk/historien/",
+            "https://strandingsmuseet.dk/om-museet/",
+            "https://strandingsmuseet.dk/kontakt-os/",
+            "https://strandingsmuseet.dk/stoetteforeningen/",
+            "https://da.wikipedia.org/wiki/Strandingsmuseum_St._George",
+        ]
+    }
+}
 
 
 def scrape_page(url):
+    """Henter og renser tekst fra en URL."""
     try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        r = requests.get(url, timeout=10, headers=headers)
-        if r.status_code != 200:
-            print(f"  Sprang over (status {r.status_code}): {url}")
-            return ""
-        soup = BeautifulSoup(r.text, "html.parser")
-        for tag in soup(["script", "style", "nav", "footer", "header"]):
+        headers = {"User-Agent": "Mozilla/5.0 (compatible; MuseumScraper/1.0)"}
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        # Fjern scripts, styles, nav, footer
+        for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
             tag.decompose()
+
         text = soup.get_text(separator="\n", strip=True)
-        lines = [l for l in text.splitlines() if len(l) > 30]
+
+        # Rens tomme linjer
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
         return "\n".join(lines)
     except Exception as e:
-        print(f"  Fejl på {url}: {e}")
+        print(f"  Fejl ved {url}: {e}")
         return ""
 
 
-def run_scraper():
-    sider = load_sider()
-    print(f"Starter scraping af {len(sider)} sider...\n")
-    al_tekst = []
+def scrape_museum(name, config):
+    """Scraper alle sider for ét museum og gemmer i én fil."""
+    print(f"\n{'='*50}")
+    print(f"Scraper: {name}")
+    print(f"{'='*50}")
 
-    for url in sider:
-        print(f"  Scraper: {url}")
-        tekst = scrape_page(url)
-        if tekst:
-            al_tekst.append(f"=== {url} ===\n{tekst}\n")
-            print(f"  OK ({len(tekst)} tegn)")
-        else:
-            print(f"  Ingen tekst fundet")
-        time.sleep(0.5)
+    all_text = []
+    for url in config["urls"]:
+        print(f"  Henter: {url}")
+        text = scrape_page(url)
+        if text:
+            all_text.append(f"--- KILDE: {url} ---\n{text}")
+        time.sleep(1)  # Vær venlig mod serverne
+
+    output = "\n\n".join(all_text)
 
     os.makedirs("data", exist_ok=True)
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-        f.write("\n".join(al_tekst))
+    with open(config["file"], "w", encoding="utf-8") as f:
+        f.write(output)
 
-    print(f"\nFærdig! Gemt i {OUTPUT_FILE}")
-    print(f"Størrelse: {os.path.getsize(OUTPUT_FILE) // 1024} KB")
+    print(f"  Gemt: {config['file']} ({len(output)} tegn)")
 
 
 if __name__ == "__main__":
-    run_scraper()
+    import sys
+
+    # Kør enten et specifikt museum eller alle
+    if len(sys.argv) > 1:
+        museum = sys.argv[1]
+        if museum in MUSEUMS:
+            scrape_museum(museum, MUSEUMS[museum])
+        else:
+            print(f"Ukendt museum: {museum}")
+            print(f"Muligheder: {', '.join(MUSEUMS.keys())}")
+    else:
+        for name, config in MUSEUMS.items():
+            scrape_museum(name, config)
+
+    print("\nFærdig!")
